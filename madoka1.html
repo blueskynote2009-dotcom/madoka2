@@ -1,0 +1,425 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Timer, CheckCircle, XCircle, Play, RotateCcw, Award, ArrowRight, Heart, Coffee, Leaf, Sparkles, Lightbulb, Shuffle, ChevronRight } from 'lucide-react';
+
+/**
+ * まどか先生の英語の保健室：思考のスキャニングトレーニング
+ * 共通テストの「抽象・具体」の言い換えに特化した20問トレーニングアプリ。
+ * 外部DB不要、単一ファイルで完結しデプロイ可能です。
+ */
+
+const App = () => {
+  const [gameState, setGameState] = useState('start'); 
+  const [currentLevelIdx, setCurrentLevelIdx] = useState(0);
+  const [shuffledLevels, setShuffledLevels] = useState([]);
+  const [score, setScore] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(300); 
+  const [feedback, setFeedback] = useState(null); 
+  const [combo, setCombo] = useState(0);
+  const [showThinkingPoint, setShowThinkingPoint] = useState(false);
+  const [selectedOption, setSelectedOption] = useState(null);
+
+  // 全20問のデータベース（1問5点 × 20問 ＝ 100点）
+  const allLevels = [
+    {
+      type: "【具体 → 抽象】",
+      target: "hamsters, rabbits, and guinea pigs",
+      options: ["small pet animals", "aquatic creatures", "wild predators", "colorful birds"],
+      answer: "small pet animals",
+      thinking: "個別の動物の名前を『小動物』というカテゴリーにまとめています。"
+    },
+    {
+      type: "【具体 → 抽象】",
+      target: "from 9:00 AM to 5:00 PM",
+      options: ["during the daytime", "throughout the night", "at sunset", "twice a week"],
+      answer: "during the daytime",
+      thinking: "具体的な時刻を『日中』という時間概念に変換しています。"
+    },
+    {
+      type: "【具体 → 抽象】",
+      target: "well tested and controlled",
+      options: ["properly assessed", "newly invented", "cheap and fast", "dangerous to use"],
+      answer: "properly assessed",
+      thinking: "『テスト・制御される』を『適切に評価（assessed）される』という概念に。2025年第5問の重要表現です。"
+    },
+    {
+      type: "【具体 → 抽象】",
+      target: "no permit is required",
+      options: ["can use it freely", "must pay a fee", "limited access", "only for students"],
+      answer: "can use it freely",
+      thinking: "『許可不要』＝『自由に使える』という判断力を問う言い換えです。"
+    },
+    {
+      type: "【具体 → 抽象】",
+      target: "farthest from the entrance",
+      options: ["at the back of the area", "near the front door", "beside the exit", "in the middle"],
+      answer: "at the back of the area",
+      thinking: "入口から最も遠い＝『一番奥』を指します。"
+    },
+    {
+      type: "【具体 → 抽象】",
+      target: "every Monday and Thursday",
+      options: ["twice a week", "on weekends", "every other day", "daily"],
+      answer: "twice a week",
+      thinking: "特定の曜日を『週に何回』という頻度に抽象化しています。"
+    },
+    {
+      type: "【具体 → 抽象】",
+      target: "within 10 minutes on foot",
+      options: ["walking distance", "by public transport", "an hour drive", "near the station"],
+      answer: "walking distance",
+      thinking: "『徒歩10分以内』を『徒歩圏内』と言い換えています。"
+    },
+    {
+      type: "【具体 → 抽象】",
+      target: "soft grass on the floor",
+      options: ["vegetation bedding", "sandy ground", "wooden tiles", "plastic cover"],
+      answer: "vegetation bedding",
+      thinking: "『草（grass）』を『植物（vegetation）』という上位語に変換しています。"
+    },
+    {
+      type: "【具体 → 抽象】",
+      target: "discount for students",
+      options: ["reduced price for learners", "free admission", "full-price tickets", "group reservation"],
+      answer: "reduced price for learners",
+      thinking: "『学生割引』を『学習者のための価格減免』と説明的に言い換えています。"
+    },
+    {
+      type: "【具体 → 抽象】",
+      target: "18 years old and over",
+      options: ["adults only", "children only", "for families", "all ages"],
+      answer: "adults only",
+      thinking: "年齢制限を『大人限定』というカテゴリーに抽象化しています。"
+    },
+    {
+      type: "【抽象 → 具体】",
+      target: "outdoor activities",
+      options: ["hiking and camping", "coding and gaming", "reading and writing", "sleeping and dreaming"],
+      answer: "hiking and camping",
+      thinking: "『屋外活動』の具体的な中身を特定するトレーニングです。"
+    },
+    {
+      type: "【抽象 → 具体】",
+      target: "medical facilities",
+      options: ["hospitals and clinics", "theaters and parks", "banks and stores", "factories and farms"],
+      answer: "hospitals and clinics",
+      thinking: "『医療施設』という言葉から、具体的な場所を想起します。"
+    },
+    {
+      type: "【抽象 → 具体】",
+      target: "academic achievements",
+      options: ["good grades and awards", "delicious food", "new clothes", "fast cars"],
+      answer: "good grades and awards",
+      thinking: "『学業の成果』を具体的な成績や賞に関連付けます。"
+    },
+    {
+      type: "【抽象 → 具体】",
+      target: "digital devices",
+      options: ["smartphones and tablets", "pens and pencils", "chairs and tables", "shoes and socks"],
+      answer: "smartphones and tablets",
+      thinking: "『デジタル機器』の具体例をスキャンします。"
+    },
+    {
+      type: "【抽象 → 具体】",
+      target: "tropical fruits",
+      options: ["mangoes and pineapples", "apples and pears", "grapes and cherries", "peaches and plums"],
+      answer: "mangoes and pineapples",
+      thinking: "カテゴリーを具体的な名前に分解する練習です。"
+    },
+    {
+      type: "【抽象 → 具体】",
+      target: "dairy products",
+      options: ["milk and cheese", "meat and fish", "bread and rice", "sugar and salt"],
+      answer: "milk and cheese",
+      thinking: "『乳製品』に含まれる具体的な食品を選びます。"
+    },
+    {
+      type: "【抽象 → 具体】",
+      target: "seasonal changes",
+      options: ["spring, summer, fall, winter", "morning, noon, evening", "north, south, east, west", "red, blue, yellow"],
+      answer: "spring, summer, fall, winter",
+      thinking: "『季節の移り変わり』の中身を具体的に特定します。"
+    },
+    {
+      type: "【抽象 → 具体】",
+      target: "emergency contacts",
+      options: ["police and ambulance", "friends and family", "teachers and staff", "shop and cafe"],
+      answer: "police and ambulance",
+      thinking: "『緊急連絡先』という概念を具体的な機関に結びつけます。"
+    },
+    {
+      type: "【抽象 → 具体】",
+      target: "natural disasters",
+      options: ["earthquakes and floods", "sunshine and rainbow", "festivals and events", "music and art"],
+      answer: "earthquakes and floods",
+      thinking: "『自然災害』という抽象語を具体的な現象に翻訳します。"
+    },
+    {
+      type: "【抽象 → 具体】",
+      target: "daily necessities",
+      options: ["food and water", "luxury watches", "designer bags", "sports cars"],
+      answer: "food and water",
+      thinking: "『生活必需品』という言葉が何を指すかを判断します。"
+    }
+  ];
+
+  const shuffleArray = (array) => {
+    const newArr = [...array];
+    for (let i = newArr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+    }
+    return newArr;
+  };
+
+  const startGame = () => {
+    // 問題と選択肢の両方をシャッフルして開始
+    const preparedLevels = shuffleArray(allLevels).map(level => ({
+      ...level,
+      options: shuffleArray(level.options)
+    }));
+    
+    setShuffledLevels(preparedLevels);
+    setGameState('playing');
+    setCurrentLevelIdx(0);
+    setScore(0);
+    setTimeLeft(300);
+    setCombo(0);
+    setFeedback(null);
+    setShowThinkingPoint(false);
+    setSelectedOption(null);
+  };
+
+  const handleSelectAnswer = useCallback((option) => {
+    if (showThinkingPoint) return;
+
+    const isCorrect = option === shuffledLevels[currentLevelIdx].answer;
+    setSelectedOption(option);
+
+    if (isCorrect) {
+      setScore(prev => prev + 5); 
+      setCombo(prev => prev + 1);
+      setFeedback('correct');
+    } else {
+      setCombo(0);
+      setFeedback('wrong');
+    }
+    
+    setShowThinkingPoint(true);
+  }, [currentLevelIdx, shuffledLevels, showThinkingPoint]);
+
+  const handleGoToNext = () => {
+    if (currentLevelIdx < shuffledLevels.length - 1) {
+      setCurrentLevelIdx(prev => prev + 1);
+      setFeedback(null);
+      setShowThinkingPoint(false);
+      setSelectedOption(null);
+    } else {
+      setGameState('result');
+    }
+  };
+
+  useEffect(() => {
+    let timer;
+    if (gameState === 'playing' && timeLeft > 0 && !showThinkingPoint) {
+      timer = setInterval(() => {
+        setTimeLeft(prev => prev - 1);
+      }, 1000);
+    } else if (timeLeft === 0) {
+      setGameState('result');
+    }
+    return () => clearInterval(timer);
+  }, [gameState, timeLeft, showThinkingPoint]);
+
+  const theme = {
+    bg: "bg-[#fdf8f1]", 
+    card: "bg-white",
+    primary: "bg-[#ffb7b2]", 
+    primaryHover: "hover:bg-[#ff9a9e]",
+    secondary: "bg-[#a8dadc]", 
+    textMain: "text-[#5a4d44]", 
+    textSub: "text-[#8e7e74]", 
+  };
+
+  return (
+    <div className={`min-h-screen ${theme.bg} flex items-center justify-center p-4 font-sans ${theme.textMain} selection:bg-[#ffb7b2/30]`}>
+      <div className={`w-full max-w-md ${theme.card} rounded-[3.5rem] shadow-[0_30px_70px_rgba(180,160,140,0.2)] overflow-hidden border-8 border-white flex flex-col min-h-[720px] relative transition-all duration-700`}>
+        
+        <div className="absolute -top-20 -right-20 w-64 h-64 bg-[#ffefef] rounded-full blur-[80px] opacity-60"></div>
+        <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-[#f0f9f0] rounded-full blur-[80px] opacity-60"></div>
+
+        <div className="p-7 flex justify-between items-center relative z-10">
+          <div className="flex items-center gap-2.5 text-[#b8a398]">
+            <div className="bg-[#fff9f0] p-1.5 rounded-lg shadow-inner">
+              <Leaf size={16} className="text-[#a8dadc]" />
+            </div>
+            <span className="text-[10px] font-bold tracking-[0.25em] uppercase opacity-70">The Healing Room</span>
+          </div>
+          {gameState === 'playing' && (
+            <div className={`flex items-center gap-2 font-bold px-4 py-2 rounded-full shadow-sm transition-all ${timeLeft < 30 ? 'bg-red-50 text-red-400 font-black' : 'bg-white text-[#ff9a9e]'}`}>
+              <Timer size={16} /> <span className="font-mono">{timeLeft}s</span>
+            </div>
+          )}
+        </div>
+
+        {gameState === 'start' && (
+          <div className="flex-grow flex flex-col items-center justify-center p-10 text-center relative z-10 animate-in fade-in duration-1000">
+            <div className="w-32 h-32 bg-[#fff9f0] rounded-full flex items-center justify-center text-[#e8b69d] mb-10 shadow-inner border-4 border-white relative">
+              <Coffee size={56} strokeWidth={1} />
+              <div className="absolute -top-2 -right-2 bg-white p-2 rounded-full shadow-md text-[#ffb7b2] animate-pulse">
+                <Heart size={20} fill="currentColor" />
+              </div>
+            </div>
+            <h2 className="text-3xl font-bold mb-5 tracking-tight leading-tight">思考のスキャニング<br/><span className="text-[#ffb7b2]">20問・100点満点</span></h2>
+            <p className={`${theme.textSub} text-[14px] mb-12 leading-relaxed px-4 italic font-medium`}>
+              「同じ単語」を探すのはもう卒業。<br/>
+              解説をじっくり読んで、自分のペースで<br/>
+              <b>「思考のブリッジ」</b>をマスターしましょう。🌿
+            </p>
+            <button
+              onClick={startGame}
+              className={`w-full ${theme.primary} ${theme.primaryHover} text-white font-bold py-6 px-8 rounded-full text-xl shadow-xl shadow-[#ffb7b2/30] transition-all active:scale-95 flex items-center justify-center gap-3`}
+            >
+              <Play fill="white" size={24} /> 特訓をはじめる
+            </button>
+            <p className="mt-8 text-[9px] font-bold tracking-[0.3em] uppercase opacity-30 italic">Madoka's English Infirmary</p>
+          </div>
+        )}
+
+        {gameState === 'playing' && shuffledLevels.length > 0 && (
+          <div className="flex-grow flex flex-col p-8 relative z-10 animate-in fade-in duration-500">
+            <div className="flex justify-between items-center mb-8">
+              <div className="text-left">
+                <span className="text-[10px] font-black text-[#b8a398] uppercase tracking-[0.2em] block mb-2 opacity-80 italic">
+                  {shuffledLevels[currentLevelIdx].type}
+                </span>
+                <div className="text-2xl font-black italic text-[#e8b69d]">Score: {score}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] font-bold text-[#dcd0c9] mb-2 tracking-widest">{currentLevelIdx + 1} / 20</div>
+                <div className="flex gap-1 max-w-[90px] flex-wrap justify-end">
+                  {[...Array(20)].map((_, i) => (
+                    <div key={i} className={`h-1.5 w-1.5 rounded-full transition-all duration-300 ${i <= currentLevelIdx ? 'bg-[#ffb7b2] scale-110 shadow-sm' : 'bg-slate-100'}`}></div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-[#fffcf8] border-2 border-[#f5efeb] p-8 rounded-[3rem] text-center mb-10 relative shadow-sm min-h-[160px] flex items-center justify-center">
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white px-5 py-1.5 rounded-full border border-[#f5efeb] text-[10px] font-black text-[#b8a398] uppercase tracking-[0.2em] italic shadow-sm">Target Phrase</span>
+              
+              <h3 className={`text-xl font-bold transition-all duration-500 ${showThinkingPoint ? 'scale-90 text-[#8e7e74] italic' : 'scale-100'}`}>
+                "{shuffledLevels[currentLevelIdx].target}"
+              </h3>
+            </div>
+
+            {!showThinkingPoint ? (
+              <div className="grid grid-cols-1 gap-3.5 animate-in fade-in duration-300">
+                <span className="text-[9px] font-bold text-[#b8a398] uppercase tracking-[0.2em] mb-2 ml-5 italic opacity-60">ふさわしい表現を選ぶ：</span>
+                {shuffledLevels[currentLevelIdx].options.map((option, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleSelectAnswer(option)}
+                    className="w-full p-4.5 text-left rounded-[1.5rem] border-2 border-transparent bg-[#f9f5f2] hover:bg-white hover:border-[#ffb7b2] hover:shadow-lg transition-all font-bold text-[#7a6a5f] text-sm flex justify-between items-center group relative overflow-hidden active:scale-95"
+                  >
+                    <span className="relative z-10">{option}</span>
+                    <ArrowRight size={18} className="text-[#dcd0c9] group-hover:text-[#ffb7b2] group-hover:translate-x-1.5 transition-all" />
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 flex flex-col flex-grow">
+                <div className={`w-full p-5 mb-6 rounded-[1.5rem] border-2 flex justify-between items-center shadow-sm ${
+                  selectedOption === shuffledLevels[currentLevelIdx].answer 
+                  ? 'border-[#82c182] bg-[#f0f9f0]' 
+                  : 'border-[#ff9a9e] bg-[#fff5f5]'
+                }`}>
+                  <div className="flex items-center gap-3 font-bold text-sm">
+                    {selectedOption === shuffledLevels[currentLevelIdx].answer 
+                      ? <CheckCircle size={20} className="text-[#82c182]" /> 
+                      : <XCircle size={20} className="text-[#ff9a9e]" />
+                    }
+                    <span className={selectedOption === shuffledLevels[currentLevelIdx].answer ? 'text-[#5a4d44]' : 'text-[#8e7e74]'}>
+                      {selectedOption}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest opacity-40">Your Choice</span>
+                </div>
+
+                <div className="bg-[#fff9f0] p-6 rounded-[2rem] border-l-8 border-[#ffb7b2] flex gap-4 shadow-sm relative mb-8">
+                  <div className="bg-white p-2 rounded-xl shadow-sm h-fit">
+                    <Lightbulb className="text-[#ffb7b2]" size={22} />
+                  </div>
+                  <div className="text-[15px] leading-relaxed font-bold text-[#7a6a5f]">
+                    <span className="text-[#b8a398] font-black block mb-2 uppercase tracking-tighter not-italic text-[11px]">Thinking Point</span>
+                    {shuffledLevels[currentLevelIdx].thinking}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleGoToNext}
+                  className={`mt-auto w-full py-5 rounded-full ${theme.secondary} text-white font-bold text-lg shadow-lg hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-3 mb-2`}
+                >
+                  次の問題へ <ChevronRight size={20} />
+                </button>
+              </div>
+            )}
+            
+            {!showThinkingPoint && (
+              <div className="mt-auto text-center pt-4">
+                 {combo > 1 && (
+                  <div className="inline-flex items-center gap-2 bg-[#fff0f0] text-[#ff9a9e] px-5 py-2 rounded-full text-[11px] font-black italic shadow-sm animate-bounce">
+                     <Sparkles size={12} /> {combo}問れんぞく！
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {gameState === 'result' && (
+          <div className="flex-grow flex flex-col items-center justify-center p-12 animate-in zoom-in duration-1000 relative z-10 text-center">
+            <div className="bg-[#fff9f0] p-7 rounded-full text-[#e8b69d] mb-8 shadow-inner border-4 border-white relative">
+              <Award size={72} strokeWidth={1} />
+              <div className="absolute top-0 right-0 animate-pulse text-[#ffb7b2]">
+                <Sparkles size={32} />
+              </div>
+            </div>
+            <h2 className="text-3xl font-bold mb-3 tracking-tighter leading-tight text-slate-800">特訓、おつかれさま🌿</h2>
+            <p className="text-[#b8a398] font-bold text-[11px] mb-8 tracking-[0.3em] uppercase opacity-70 italic">Final Assessment</p>
+            <div className="text-8xl font-black text-[#ffb7b2] mb-12 tracking-tighter drop-shadow-sm select-none">
+              {score}<span className="text-3xl text-[#dcd0c9] ml-1">/100</span>
+            </div>
+            
+            <div className="bg-[#fffcf8] p-8 rounded-[3rem] mb-12 w-full border-2 border-[#f5efeb] shadow-inner relative">
+              <p className="text-[#8e7e74] text-[15px] leading-relaxed italic font-bold">
+                {score === 100 
+                  ? "【Sランク】完璧です！20の変換をすべてこなしたあなたは、もうどんな言い換えにも惑わされません。自信を持って扉を開けてくださいね。" 
+                  : score >= 80
+                  ? "【Aランク】素晴らしい！具体と抽象を繋ぐスピードが格段に上がっています。本番もそのリズムを大切に。"
+                  : "【Bランク】よく頑張りました。一度間違えた『Thinking Point』をゆっくり見直すだけで、次はもっと楽に解けるようになりますよ。"}
+              </p>
+            </div>
+
+            <div className="space-y-5 w-full px-4">
+              <button
+                onClick={startGame}
+                className="w-full text-[#b8a398] hover:text-[#7a6a5f] font-bold py-3 text-xs flex items-center justify-center gap-2 transition-all underline underline-offset-8 decoration-2"
+              >
+                <RotateCcw size={14} /> 新しい問題セットで再挑戦
+              </button>
+              <a 
+                href="#" 
+                className={`w-full ${theme.primary} ${theme.primaryHover} text-white font-bold py-6 rounded-full flex items-center justify-center gap-2 shadow-xl shadow-[#ffb7b2/20] transition-all active:scale-95 text-lg text-center`}
+              >
+                まどか先生のNoteを読む <Heart size={22} fill="white" />
+              </a>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+};
+
+export default App;
